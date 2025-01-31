@@ -1,5 +1,7 @@
 # Local .terraform directories
 **/.terraform/*
+**/**/.terraform/*
+**/**/**/.terraform/*
 
 # .tfstate files
 *.tfstate
@@ -38,7 +40,7 @@ terraform.rc
 *.backup
 
 # Ignore local modules
-*.terraform/modules/*
+*.terraform/modules*/*
 
 # Ignore logs
 *.log
