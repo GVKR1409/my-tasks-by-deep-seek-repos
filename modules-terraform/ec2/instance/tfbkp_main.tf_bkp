@@ -1,0 +1,19 @@
+
+# Create an EC2 instance
+resource "aws_instance" "this" {
+  ami                    = var.ami_id          # AMI ID for the instance
+  instance_type          = var.instance_type   # Instance type (e.g., t2.micro)
+  subnet_id              = var.subnet_id       # Subnet ID where the instance will be launched
+  vpc_security_group_ids = var.security_groups # List of security group IDs
+  key_name               = var.key_name        # SSH key pair name
+  user_data              = var.user_data       # User data script for bootstrapping
+
+  # Root block device configuration
+  root_block_device {
+    volume_size = var.root_volume_size # Size of the root volume in GB
+    volume_type = var.root_volume_type # Type of the root volume (e.g., gp2, io1)
+  }
+
+  # Add tags to the instance
+  tags = merge(var.tags, local.default_tags)
+}
