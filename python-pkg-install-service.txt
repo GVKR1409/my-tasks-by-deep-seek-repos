@@ -1,0 +1,258 @@
+import subprocess
+
+def check_package_installed(package_name):
+    try:
+        subprocess.run(["dpkg", "-s", package_name], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def install_package(package_name):
+    print(f"Package '{package_name}' is not installed. Installing...")
+    try:
+        subprocess.run(["sudo", "apt-get", "install", "-y", package_name], check=True)
+        print(f"Package '{package_name}' installed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install package '{package_name}'. Error: {e}")
+        exit(1)
+
+def get_service_name(package_name):
+    try:
+        result = subprocess.run(
+            ["dpkg", "-L", package_name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        files = result.stdout.splitlines()
+        for file in files:
+            if file.endswith(".service"):
+                return file.split("/")[-1]  # Return the service name
+        return package_name  # Fallback to package name
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to list package files. Error: {e}")
+        return package_name  # Fallback to package name
+
+def service_action(service_name, action):
+    try:
+        subprocess.run(["sudo", "systemctl", action, service_name], check=True)
+        print(f"Service '{service_name}' {action}ed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to {action} service '{service_name}'. Error: {e}")
+
+def get_service_status(service_name):
+    try:
+        result = subprocess.run(["systemctl", "status", service_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(result.stdout.decode())
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to get status of service '{service_name}'. Error: {e}")
+
+def main():
+    package_name = input("Enter the package name: ")
+    if not check_package_installed(package_name):
+        install_package(package_name)
+        service_name = get_service_name(package_name)
+        print(f"Detected service name: {service_name}")
+        service_action(service_name, "start")
+        get_service_status(service_name)
+    else:
+        print(f"Package '{package_name}' is already installed.")
+        service_name = get_service_name(package_name)
+        print(f"Detected service name: {service_name}")
+        action = input("Do you want to start, stop, or check the status of the service? (start/stop/status): ").strip().lower()
+        if action in ["start", "stop"]:
+            service_action(service_name, action)
+        elif action == "status":
+            get_service_status(service_name)
+        else:
+            print("Invalid action. Please choose 'start', 'stop', or 'status'.")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+#######################################################################################################################################
+
+After installing a package that provides a service, the service name might not always be the same as the package name. To reliably determine the service name, you can use the following approaches:
+
+---
+
+### 1. **Use `systemctl` to List All Services**
+   After installing the package, you can list all services and filter the ones related to the package. For example:
+   ```bash
+   systemctl list-unit-files --type=service | grep <package_name>
+   ```
+
+   In Python, you can automate this:
+   ```python
+   def get_service_name(package_name):
+       try:
+           result = subprocess.run(
+               ["systemctl", "list-unit-files", "--type=service"],
+               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+           )
+           services = result.stdout.splitlines()
+           for service in services:
+               if package_name in service:
+                   return service.split()[0]  # Return the service name
+           return None
+       except subprocess.CalledProcessError as e:
+           print(f"Failed to list services. Error: {e}")
+           return None
+   ```
+
+---
+
+### 2. **Check the Package's Installed Files**
+   You can inspect the files installed by the package to find the service file. Service files are typically located in `/lib/systemd/system/` or `/etc/systemd/system/`.
+
+   Use the `dpkg -L` command to list files installed by the package:
+   ```bash
+   dpkg -L <package_name> | grep .service
+   ```
+
+   In Python:
+   ```python
+   def get_service_name(package_name):
+       try:
+           result = subprocess.run(
+               ["dpkg", "-L", package_name],
+               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+           )
+           files = result.stdout.splitlines()
+           for file in files:
+               if file.endswith(".service"):
+                   return file.split("/")[-1]  # Return the service name
+           return None
+       except subprocess.CalledProcessError as e:
+           print(f"Failed to list package files. Error: {e}")
+           return None
+   ```
+
+---
+
+### 3. **Use `systemctl` to Check for Active Services**
+   After installing the package, you can check which services are active and match them to the package name:
+   ```bash
+   systemctl list-units --type=service --state=active | grep <package_name>
+   ```
+
+   In Python:
+   ```python
+   def get_service_name(package_name):
+       try:
+           result = subprocess.run(
+               ["systemctl", "list-units", "--type=service", "--state=active"],
+               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+           )
+           services = result.stdout.splitlines()
+           for service in services:
+               if package_name in service:
+                   return service.split()[0]  # Return the service name
+           return None
+       except subprocess.CalledProcessError as e:
+           print(f"Failed to list active services. Error: {e}")
+           return None
+   ```
+
+---
+
+### 4. **Fallback to Package Name**
+   If none of the above methods work, you can fall back to using the package name as the service name. Many packages use the same name for the service as the package itself.
+
+---
+
+### Updated Python Script with Service Name Detection
+Here’s the updated script that includes service name detection:
+
+```python
+import subprocess
+
+def check_package_installed(package_name):
+    try:
+        subprocess.run(["dpkg", "-s", package_name], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def install_package(package_name):
+    print(f"Package '{package_name}' is not installed. Installing...")
+    try:
+        subprocess.run(["sudo", "apt-get", "install", "-y", package_name], check=True)
+        print(f"Package '{package_name}' installed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install package '{package_name}'. Error: {e}")
+        exit(1)
+
+def get_service_name(package_name):
+    try:
+        result = subprocess.run(
+            ["dpkg", "-L", package_name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        files = result.stdout.splitlines()
+        for file in files:
+            if file.endswith(".service"):
+                return file.split("/")[-1]  # Return the service name
+        return package_name  # Fallback to package name
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to list package files. Error: {e}")
+        return package_name  # Fallback to package name
+
+def service_action(service_name, action):
+    try:
+        subprocess.run(["sudo", "systemctl", action, service_name], check=True)
+        print(f"Service '{service_name}' {action}ed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to {action} service '{service_name}'. Error: {e}")
+
+def get_service_status(service_name):
+    try:
+        result = subprocess.run(["systemctl", "status", service_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(result.stdout.decode())
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to get status of service '{service_name}'. Error: {e}")
+
+def main():
+    package_name = input("Enter the package name: ")
+    if not check_package_installed(package_name):
+        install_package(package_name)
+        service_name = get_service_name(package_name)
+        print(f"Detected service name: {service_name}")
+        service_action(service_name, "start")
+        get_service_status(service_name)
+    else:
+        print(f"Package '{package_name}' is already installed.")
+        service_name = get_service_name(package_name)
+        print(f"Detected service name: {service_name}")
+        action = input("Do you want to start, stop, or check the status of the service? (start/stop/status): ").strip().lower()
+        if action in ["start", "stop"]:
+            service_action(service_name, action)
+        elif action == "status":
+            get_service_status(service_name)
+        else:
+            print("Invalid action. Please choose 'start', 'stop', or 'status'.")
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+### Key Changes:
+1. **`get_service_name` Function**: Detects the service name by checking the package's installed files for a `.service` file.
+2. **Fallback to Package Name**: If no service file is found, it falls back to using the package name as the service name.
+3. **Service Detection After Installation**: After installing the package, the script detects the service name and uses it for starting/stopping/checking the status.
+
+---
+
+### Example Output:
+```bash
+$ python3 service_manager.py
+Enter the package name: nginx
+Package 'nginx' is not installed. Installing...
+Detected service name: nginx.service
+Service 'nginx.service' started successfully.
+```
+
+This script should work for most packages that provide systemd services. If the service name is still not detected, you may need to manually specify it.
